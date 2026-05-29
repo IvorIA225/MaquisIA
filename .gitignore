@@ -1,0 +1,21 @@
+# Fichiers secrets et clés d'API (À NE JAMAIS PUSHER SUR GITHUB)
+.env
+*.db
+*.sqlite
+maquisia.db
+
+# Dépendances et environnements virtuels
+backend/venv/
+backend/__pycache__/
+backend/*/__pycache__/
+frontend/node_modules/
+frontend/dist/
+
+# Fichiers systèmes et temporaires de l'assistant
+.system_generated/
+brain/
+scratch/
+.gemini/
+.vscode/
+.idea/
+*.log
