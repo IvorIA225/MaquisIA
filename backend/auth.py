@@ -6,8 +6,8 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-import models
-import database
+from backend import models
+from backend import database
 
 # Configuration de la sécurité
 SECRET_KEY = os.getenv("JWT_SECRET", "super_secret_key_for_maquis_saas_12345!")

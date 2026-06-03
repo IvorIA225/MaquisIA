@@ -2,7 +2,7 @@ import os
 import json
 import google.generativeai as genai
 from sqlalchemy.orm import Session
-import models
+from backend import models
 from datetime import datetime, date
 import urllib.request
 import urllib.error

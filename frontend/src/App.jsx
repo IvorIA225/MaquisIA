@@ -23,6 +23,10 @@ const RobotIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg>
 );
 
+const PhoneIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+);
+
 const API_BASE_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000' : '';
 
 function App() {
@@ -40,6 +44,11 @@ function App() {
   
   // États de navigation
   const [currentTab, setCurrentTab] = useState('dashboard');
+  
+  // États WhatsApp QR Code
+  const [restaurantId, setRestaurantId] = useState(1); // À récupérer via l'API en prod
+  const [waStatus, setWaStatus] = useState('DISCONNECTED');
+  const [waQr, setWaQr] = useState(null);
   
   // États pour l'onglet Commandes WhatsApp
   const [allOrders, setAllOrders] = useState([]);
@@ -173,14 +182,34 @@ Pose-moi toutes tes questions ou clique sur l'une des suggestions rapides ci-des
     }
   };
 
+  const fetchWhatsAppStatus = async () => {
+    if (!token) return;
+    try {
+      const waServiceUrl = import.meta.env.DEV ? 'http://127.0.0.1:3001' : ''; // En prod, URL du service Node
+      const response = await fetch(`${waServiceUrl}/api/whatsapp/session/${restaurantId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setWaStatus(data.status);
+        setWaQr(data.qr);
+      }
+    } catch (err) {
+      console.log("Service WhatsApp non joignable");
+    }
+  };
 
   useEffect(() => {
     if (token) {
       fetchData();
-      const interval = setInterval(fetchData, 10000);
+      fetchWhatsAppStatus();
+      const interval = setInterval(() => {
+        fetchData();
+        if (currentTab === 'whatsapp') {
+          fetchWhatsAppStatus();
+        }
+      }, 10000);
       return () => clearInterval(interval);
     }
-  }, [token]);
+  }, [token, currentTab, restaurantId]);
 
   // Ajouter une transaction comptable en base de données
   const handleAddTransaction = async (e) => {
@@ -394,6 +423,19 @@ Pose-moi toutes tes questions ou clique sur l'une des suggestions rapides ci-des
             <RobotIcon />
             Assistant IA 🤖
           </button>
+          <button 
+            onClick={() => setCurrentTab('whatsapp')} 
+            className="btn btn-glass" 
+            style={{ 
+              justifyContent: 'flex-start', 
+              border: currentTab === 'whatsapp' ? '1px solid var(--success)' : 'none', 
+              background: currentTab === 'whatsapp' ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+              width: '100%'
+            }}
+          >
+            <PhoneIcon />
+            Scanner WhatsApp
+          </button>
         </nav>
 
         <div style={{ marginTop: 'auto' }}>
@@ -408,7 +450,9 @@ Pose-moi toutes tes questions ou clique sur l'une des suggestions rapides ci-des
           
           <div className="glass-card" style={{ padding: '1rem', textAlign: 'center' }}>
             <p className="text-muted" style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>Statut WhatsApp</p>
-            <div className="badge badge-success">Connecté</div>
+            <div className={`badge ${waStatus === 'CONNECTED' ? 'badge-success' : 'badge-warning'}`}>
+              {waStatus === 'CONNECTED' ? 'Connecté' : waStatus}
+            </div>
           </div>
         </div>
       </aside>
@@ -424,12 +468,14 @@ Pose-moi toutes tes questions ou clique sur l'une des suggestions rapides ci-des
               {currentTab === 'orders' && 'Commandes WhatsApp & Sur Place 🛵'}
               {currentTab === 'accounting' && 'Comptabilité & Grand Livre 📊'}
               {currentTab === 'ai_agent' && 'Assistant IA Comptable & Conseil 🤖'}
+              {currentTab === 'whatsapp' && 'Connexion WhatsApp (QR Code) 📱'}
             </h1>
             <p className="text-muted">
               {currentTab === 'dashboard' && `Résumé de votre journée pour ${restaurantName}.`}
               {currentTab === 'orders' && `Gérez et suivez le statut de toutes vos commandes pour ${restaurantName}.`}
               {currentTab === 'accounting' && `Suivi de la performance financière globale de ${restaurantName}.`}
               {currentTab === 'ai_agent' && `Posez vos questions comptables et obtenez des analyses en temps réel sur ${restaurantName}.`}
+              {currentTab === 'whatsapp' && `Scannez ce QR Code avec votre téléphone WhatsApp Business.`}
             </p>
           </div>
           <div className="flex gap-2">
@@ -897,6 +943,45 @@ Pose-moi toutes tes questions ou clique sur l'une des suggestions rapides ci-des
                 {chatLoading ? "Analyse..." : "Demander"}
               </button>
             </form>
+          </div>
+        )}
+
+        {/* ----------------- WHATSAPP CONNECTION VIEW ----------------- */}
+        {currentTab === 'whatsapp' && (
+          <div className="animate-fade-in flex-col items-center" style={{ width: '100%', marginTop: '2rem' }}>
+            <div className="glass-card" style={{ maxWidth: '500px', width: '100%', padding: '3rem', textAlign: 'center' }}>
+              <h2 style={{ marginBottom: '1rem' }}>Lier votre compte WhatsApp</h2>
+              
+              {waStatus === 'CONNECTED' ? (
+                <div>
+                  <div style={{ width: '80px', height: '80px', background: 'var(--success)', borderRadius: '50%', margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </div>
+                  <h3 style={{ color: 'var(--success)', marginBottom: '1rem' }}>Connecté avec succès !</h3>
+                  <p className="text-muted" style={{ marginBottom: '2rem' }}>L'IA est désormais branchée sur votre numéro et écoute les messages entrants de vos clients.</p>
+                  
+                  <button onClick={async () => {
+                    const waServiceUrl = import.meta.env.DEV ? 'http://127.0.0.1:3001' : '';
+                    await fetch(`${waServiceUrl}/api/whatsapp/session/${restaurantId}`, { method: 'DELETE' });
+                    setWaStatus('DISCONNECTED');
+                  }} className="btn btn-glass" style={{ border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fca5a5', margin: '0 auto' }}>
+                    Déconnecter le téléphone
+                  </button>
+                </div>
+              ) : waQr ? (
+                <div>
+                  <p className="text-muted" style={{ marginBottom: '2rem' }}>Ouvrez WhatsApp sur votre téléphone &gt; Appareils Connectés &gt; Lier un appareil, puis scannez ce QR Code.</p>
+                  <div style={{ background: 'white', padding: '1rem', borderRadius: '1rem', display: 'inline-block', marginBottom: '2rem' }}>
+                    <img src={waQr} alt="WhatsApp QR Code" style={{ width: '256px', height: '256px' }} />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-muted" style={{ marginBottom: '2rem' }}>Génération du QR Code en cours...</p>
+                  <div style={{ width: '40px', height: '40px', border: '4px solid var(--primary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }}></div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

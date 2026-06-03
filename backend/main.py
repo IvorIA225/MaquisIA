@@ -5,11 +5,11 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, date
 from pydantic import BaseModel
 
-import models
-import database
-import ai_agent
-import auth
-import compta_agent
+from backend import models
+from backend import database
+from backend import ai_agent
+from backend import auth
+from backend import compta_agent
 
 
 app = FastAPI(title="Assistant Comptable IA - Backend SaaS")
@@ -292,19 +292,14 @@ def update_order_status(order_id: int, status: str, current_user: models.User = 
 
 # --- WEBHOOK WHATSAPP & INTEGRATION IA (ROUTAGE MULTI-TENANT) ---
 
-def process_whatsapp_message(message_data: str, phone: str, receiver_phone: str, db: Session):
-    print(f"[{phone}] Message entrant vers [{receiver_phone}]: {message_data}")
+def process_whatsapp_message(message_data: str, phone: str, restaurant_id: int, db: Session):
+    print(f"[{phone}] Message entrant pour le Maquis ID [{restaurant_id}]: {message_data}")
     
-    # 1. Identifier le restaurant par le numéro de téléphone récepteur
-    # En production, receiver_phone est le numéro WhatsApp Business du maquis.
-    restaurant = db.query(models.Restaurant).filter(models.Restaurant.whatsapp_phone == receiver_phone).first()
+    restaurant = db.query(models.Restaurant).filter(models.Restaurant.id == restaurant_id).first()
     
-    # Si non identifié, on cherche le premier restaurant de la base à titre de fallback pour les tests
     if not restaurant:
-        restaurant = db.query(models.Restaurant).first()
-        if not restaurant:
-            print("Erreur: Aucun restaurant en base pour traiter la commande WhatsApp.")
-            return
+        print("Erreur: Aucun restaurant en base pour traiter la commande WhatsApp.")
+        return
 
     # 2. Analyser avec Gemini IA
     ai_response = ai_agent.parse_whatsapp_message_with_ai(message_data)
@@ -329,24 +324,42 @@ def process_whatsapp_message(message_data: str, phone: str, receiver_phone: str,
         db.add(new_order)
         db.commit()
         print(f"[{restaurant.name}] Nouvelle commande créée: {items_str} - {total} FCFA")
-    else:
         print(f"[{restaurant.name}] Simple message/question: {reply_msg}")
         
     print(f"ENVOI WHATSAPP -> {phone}: {reply_msg}")
+    
+    # 4. Envoyer la réponse via le service Node.js
+    import urllib.request
+    import json
+    import os
+    
+    WHATSAPP_SERVICE_URL = os.getenv("WHATSAPP_SERVICE_URL", "http://127.0.0.1:3001")
+    url = f"{WHATSAPP_SERVICE_URL}/api/whatsapp/send"
+    data = json.dumps({
+        "restaurant_id": str(restaurant_id),
+        "to": phone,
+        "message": reply_msg
+    }).encode("utf-8")
+    
+    req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
+    try:
+        with urllib.request.urlopen(req) as response:
+            print("Message expédié avec succès au service Node.")
+    except Exception as e:
+        print(f"Erreur d'appel vers le service WhatsApp Node: {e}")
 
 @app.post("/api/whatsapp/webhook")
 def whatsapp_webhook(payload: Dict[Any, Any], background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
-    """Webhook WhatsApp. Il route les messages vers le bon maquis (Multi-Tenant)."""
+    """Webhook WhatsApp appelé par notre service Node.js."""
     try:
-        # payload types:
-        # Twilio/Meta envoie typiquement 'To' (receiver) et 'From' (sender)
-        message_body = payload.get("message", payload.get("Body", ""))
-        sender_phone = payload.get("phone", payload.get("From", "00000000"))
+        message_body = payload.get("message", "")
+        sender_phone = payload.get("phone", "")
+        restaurant_id = payload.get("restaurant_id")
         
-        # Le numéro de réception (le numéro du maquis connecté)
-        receiver_phone = payload.get("receiver_phone", payload.get("To", "default_whatsapp_phone"))
+        if not restaurant_id:
+            raise ValueError("restaurant_id manquant dans le payload")
         
-        background_tasks.add_task(process_whatsapp_message, message_body, sender_phone, receiver_phone, db)
+        background_tasks.add_task(process_whatsapp_message, message_body, sender_phone, int(restaurant_id), db)
         
         return {"status": "success", "message": "WhatsApp webhook successfully routed"}
     except Exception as e:
