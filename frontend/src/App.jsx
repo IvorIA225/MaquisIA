@@ -185,7 +185,8 @@ Pose-moi toutes tes questions ou clique sur l'une des suggestions rapides ci-des
   const fetchWhatsAppStatus = async () => {
     if (!token) return;
     try {
-      const waServiceUrl = import.meta.env.DEV ? 'http://127.0.0.1:3001' : ''; // En prod, URL du service Node
+      // Pour les tests, le service Node.js tourne en local sur le port 3001
+      const waServiceUrl = 'http://127.0.0.1:3001'; 
       const response = await fetch(`${waServiceUrl}/api/whatsapp/session/${restaurantId}`);
       if (response.ok) {
         const data = await response.json();
@@ -961,7 +962,7 @@ Pose-moi toutes tes questions ou clique sur l'une des suggestions rapides ci-des
                   <p className="text-muted" style={{ marginBottom: '2rem' }}>L'IA est désormais branchée sur votre numéro et écoute les messages entrants de vos clients.</p>
                   
                   <button onClick={async () => {
-                    const waServiceUrl = import.meta.env.DEV ? 'http://127.0.0.1:3001' : '';
+                    const waServiceUrl = 'http://127.0.0.1:3001';
                     await fetch(`${waServiceUrl}/api/whatsapp/session/${restaurantId}`, { method: 'DELETE' });
                     setWaStatus('DISCONNECTED');
                   }} className="btn btn-glass" style={{ border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fca5a5', margin: '0 auto' }}>
