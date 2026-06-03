@@ -110,7 +110,32 @@ app.post('/api/whatsapp/send', async (req, res) => {
     }
 });
 
-// 3. Déconnexion explicite
+// 3. Route pour demander un code de liaison (Pairing Code)
+app.post('/api/whatsapp/pair/:restaurantId', async (req, res) => {
+    const restaurantId = req.params.restaurantId;
+    const { phoneNumber } = req.body;
+
+    if (!phoneNumber) {
+        return res.status(400).json({ error: "Le numéro de téléphone est requis." });
+    }
+
+    const session = sessions[restaurantId];
+    if (!session || !session.client) {
+        return res.status(400).json({ error: "La session WhatsApp n'est pas initialisée." });
+    }
+
+    try {
+        // Demander le code de liaison à WhatsApp (format attendu: XXXXXXXX)
+        const pairingCode = await session.client.requestPairingCode(phoneNumber);
+        console.log(`Code de liaison généré pour ${phoneNumber}: ${pairingCode}`);
+        res.json({ code: pairingCode });
+    } catch (err) {
+        console.error("Erreur génération pairing code:", err);
+        res.status(500).json({ error: "Impossible de générer le code. Vérifiez le format du numéro." });
+    }
+});
+
+// 4. Déconnexion explicite
 app.delete('/api/whatsapp/session/:restaurantId', async (req, res) => {
     const restaurantId = req.params.restaurantId;
     const session = sessions[restaurantId];

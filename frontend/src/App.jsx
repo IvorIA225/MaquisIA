@@ -49,6 +49,11 @@ function App() {
   const [restaurantId, setRestaurantId] = useState(1); // À récupérer via l'API en prod
   const [waStatus, setWaStatus] = useState('DISCONNECTED');
   const [waQr, setWaQr] = useState(null);
+  const [usePairingCode, setUsePairingCode] = useState(false);
+  const [waPhoneNumber, setWaPhoneNumber] = useState('');
+  const [waPairingCode, setWaPairingCode] = useState('');
+  const [waPairingLoading, setWaPairingLoading] = useState(false);
+  const [waPairingError, setWaPairingError] = useState('');
   
   // États pour l'onglet Commandes WhatsApp
   const [allOrders, setAllOrders] = useState([]);
@@ -250,6 +255,31 @@ Pose-moi toutes tes questions ou clique sur l'une des suggestions rapides ci-des
       setModalError(err.message);
     } finally {
       setModalLoading(false);
+    }
+  };
+
+  const handleRequestPairingCode = async (e) => {
+    e.preventDefault();
+    setWaPairingError('');
+    setWaPairingCode('');
+    setWaPairingLoading(true);
+
+    try {
+      const waServiceUrl = 'http://127.0.0.1:3001';
+      const response = await fetch(`${waServiceUrl}/api/whatsapp/pair/${restaurantId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: waPhoneNumber.replace(/\D/g, '') }) // Enlever les espaces/caractères
+      });
+      
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Erreur inconnue");
+      
+      setWaPairingCode(data.code);
+    } catch (err) {
+      setWaPairingError(err.message);
+    } finally {
+      setWaPairingLoading(false);
     }
   };
 
@@ -965,15 +995,63 @@ Pose-moi toutes tes questions ou clique sur l'une des suggestions rapides ci-des
                     const waServiceUrl = 'http://127.0.0.1:3001';
                     await fetch(`${waServiceUrl}/api/whatsapp/session/${restaurantId}`, { method: 'DELETE' });
                     setWaStatus('DISCONNECTED');
+                    setWaPairingCode('');
                   }} className="btn btn-glass" style={{ border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fca5a5', margin: '0 auto' }}>
                     Déconnecter le téléphone
                   </button>
+                </div>
+              ) : usePairingCode ? (
+                <div style={{ textAlign: 'left' }}>
+                  <p className="text-muted" style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+                    Caméra indisponible ? Utilisez un code à 8 lettres pour lier votre téléphone.
+                  </p>
+                  
+                  {waPairingCode ? (
+                     <div className="glass-card" style={{ textAlign: 'center', padding: '2rem' }}>
+                        <h3 style={{ marginBottom: '1rem' }}>Entrez ce code sur votre téléphone :</h3>
+                        <div style={{ fontSize: '2.5rem', letterSpacing: '0.5rem', fontWeight: 'bold', background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '1rem', marginBottom: '2rem', fontFamily: 'monospace' }}>
+                           {waPairingCode}
+                        </div>
+                        <p className="text-muted" style={{ fontSize: '0.9rem' }}>
+                           Ouvrez WhatsApp sur votre téléphone &gt; Appareils connectés &gt; Lier un appareil &gt; "Lier avec un numéro de téléphone" au bas de l'écran.
+                        </p>
+                     </div>
+                  ) : (
+                     <form onSubmit={handleRequestPairingCode} className="flex-col gap-4">
+                        <div className="flex-col gap-2">
+                          <label style={{ color: 'var(--text-muted)' }}>Votre numéro WhatsApp avec l'indicatif (ex: 2250708091011)</label>
+                          <input 
+                            type="text" 
+                            value={waPhoneNumber} 
+                            onChange={(e) => setWaPhoneNumber(e.target.value)} 
+                            placeholder="225..." 
+                            required 
+                            style={{ padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--surface-border)', background: 'rgba(255,255,255,0.05)', color: 'white', outline: 'none' }}
+                          />
+                        </div>
+                        {waPairingError && <p style={{ color: 'var(--danger)', fontSize: '0.9rem' }}>{waPairingError}</p>}
+                        <button type="submit" className="btn btn-primary" disabled={waPairingLoading} style={{ width: '100%', justifyContent: 'center' }}>
+                           {waPairingLoading ? 'Génération du code...' : 'Demander le code'}
+                        </button>
+                     </form>
+                  )}
+                  
+                  <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+                    <button onClick={() => setUsePairingCode(false)} className="btn btn-glass" style={{ margin: '0 auto', fontSize: '0.85rem' }}>
+                      Retourner au QR Code
+                    </button>
+                  </div>
                 </div>
               ) : waQr ? (
                 <div>
                   <p className="text-muted" style={{ marginBottom: '2rem' }}>Ouvrez WhatsApp sur votre téléphone &gt; Appareils Connectés &gt; Lier un appareil, puis scannez ce QR Code.</p>
                   <div style={{ background: 'white', padding: '1rem', borderRadius: '1rem', display: 'inline-block', marginBottom: '2rem' }}>
                     <img src={waQr} alt="WhatsApp QR Code" style={{ width: '256px', height: '256px' }} />
+                  </div>
+                  <div>
+                    <button onClick={() => setUsePairingCode(true)} className="btn btn-glass" style={{ margin: '0 auto', fontSize: '0.9rem', borderColor: 'var(--primary)', color: 'var(--primary-light)' }}>
+                      Ma caméra est gâtée (Utiliser un numéro)
+                    </button>
                   </div>
                 </div>
               ) : (
