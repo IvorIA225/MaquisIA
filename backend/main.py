@@ -11,8 +11,6 @@ import ai_agent
 import auth
 import compta_agent
 
-# Créer les tables dans la base de données
-models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Assistant Comptable IA - Backend SaaS")
 
@@ -40,6 +38,11 @@ class LoginSchema(BaseModel):
 
 @app.post("/api/auth/register")
 def register(payload: RegisterSchema, db: Session = Depends(database.get_db)):
+    try:
+        models.Base.metadata.create_all(bind=database.engine)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur DB Supabase: Vérifiez votre DATABASE_URL. Détail: {str(e)}")
+
     # Vérifier si l'utilisateur existe déjà
     existing_user = db.query(models.User).filter(models.User.username == payload.username).first()
     if existing_user:
